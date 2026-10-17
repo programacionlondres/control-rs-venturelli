@@ -119,6 +119,28 @@ body{font-family:-apple-system,sans-serif;background:#f0f0ec;color:#1a1a1a}
 .barra-sel .btn-aplicar{background:#E18426;color:#fff}
 .barra-sel .btn-cancelar{background:rgba(255,255,255,.15);color:#fff}
 </style>
+<style>
+.hc-x{background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;padding:0 4px}
+#mrd-hc{max-width:820px}
+.hc-scroll{max-height:68vh;overflow-y:auto;padding-right:2px}
+.hc-sem{margin:0 0 .9rem;overflow-x:auto}
+.hc-t{width:100%;border-collapse:collapse;font-size:12px;min-width:560px;background:#fff}
+.hc-t th,.hc-t td{border:1px solid #ececec;text-align:center;padding:5px 3px}
+.hc-t th{background:#f4f3ee;color:#666;font-weight:600;font-size:11px;line-height:1.25}
+.hc-t th small{display:block;font-weight:400;color:#999;font-size:10px}
+.hc-t th.hc-fer{background:#FFF6D6}
+.hc-t th.hc-fer small.fer{color:#B7791F;font-weight:700}
+.hc-t th.hc-hoy{box-shadow:inset 0 -3px 0 #E18426}
+.hc-t td.hc-rl{position:sticky;left:0;z-index:1;text-align:left;font-weight:600;font-size:11px;padding:5px 7px;white-space:nowrap}
+.hc-t td.hc-z{color:#aaa}
+.hc-t td.hc-nd{color:#ccc;background:#fafafa}
+.hc-t td.hc-p{background:#f4f3ee;font-weight:700}
+.hc-t td.hc-a{background:#faf9f6;font-weight:700;color:#1A1846}
+.hc-t td.hc-a small{display:block;font-weight:400;color:#888;font-size:10px}
+.hc-t td sup{color:#E18426;font-weight:700}
+.hc-wk{font-size:11px;font-weight:700;color:#1A1846;margin:.35rem 0 .25rem}
+.hc-info{font-size:11px;color:#777;margin-bottom:.6rem;line-height:1.4}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
@@ -130,6 +152,7 @@ body{font-family:-apple-system,sans-serif;background:#f0f0ec;color:#1a1a1a}
     <button class="bh" onclick="exportar()">Exportar</button>
     <button class="bh" style="background:#E18426;color:#fff;font-weight:600" onclick="abrirInformeSemanal()">Informe</button>
     <button class="bh" style="background:#1A1846;color:#fff;font-weight:600" onclick="abrirHistoricoRS()">📊 Histórico</button>
+    <button class="bh" style="background:#5B4B8A;color:#fff;font-weight:600" onclick="abrirHistorialCierres()">📅 Historial</button>
     <button class="bh" id="btn-sync" style="background:#27AE60;color:#fff;font-weight:600" onclick="sincronizarRS()">⟳ Sync</button>
     <button class="bh" style="background:#FF6B6B;color:#fff;font-weight:600" onclick="cerrarDiaRs()">Cerrar dia</button>
     <button class="bh" onclick="capturar()" id="btn-cap">Imagen</button>
@@ -219,6 +242,20 @@ body{font-family:-apple-system,sans-serif;background:#f0f0ec;color:#1a1a1a}
     <div style="overflow-x:auto;margin-bottom:.5rem"><table id="hist-tabla" style="width:100%;border-collapse:collapse;font-size:11px"></table></div>
     <div id="hist-nota" style="font-size:9px;color:#aaa;text-align:center;margin-bottom:.75rem">Los cortes semanales se generan automáticamente. "Acumulado" refleja el estado actual en vivo.</div>
     <button onclick="cerrarHistoricoRS()" style="width:100%;padding:9px;border-radius:8px;border:1px solid #ccc;background:#f5f5f3;font-size:13px;cursor:pointer">Cerrar</button>
+  </div>
+</div>
+<div class="mr-sem" id="mr-hc" onclick="if(event.target===this)hcCerrar()">
+  <div class="mrd-sem" id="mrd-hc">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+      <div>
+        <div style="font-size:14px;font-weight:700;color:#1A1846">&#128197; Historial de cierres — Rs</div>
+        <div style="font-size:10px;color:#888" id="hc-sub">Avance día a día, semana a semana</div>
+      </div>
+      <button class="hc-x" onclick="hcCerrar()">&times;</button>
+    </div>
+    <div class="hc-info" id="hc-info"></div>
+    <div class="hc-scroll" id="hc-body"></div>
+    <button onclick="hcCerrar()" style="width:100%;margin-top:.6rem;padding:9px;border-radius:8px;border:1px solid #ccc;background:#f5f5f3;font-size:13px;cursor:pointer">Cerrar</button>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -879,9 +916,136 @@ function descargarInforme(){
   });
 }
 
+// ── Historial de cierres (día a día, semana a semana) ──
+var HC_FERIADOS=["2026-01-01","2026-01-02","2026-04-03","2026-04-04","2026-05-01","2026-05-21","2026-06-21","2026-06-29","2026-07-16","2026-08-15","2026-09-18","2026-09-19","2026-10-12","2026-10-31","2026-11-01","2026-12-08","2026-12-25","2027-01-01"];
+var HC_FILAS=[
+  {i:0,l:"Sello obra gruesa",bg:"#EEF1F5",c:"#5F7185"},
+  {i:1,l:"Sello gris",bg:"#E3F0FF",c:"#1a5fa8"},
+  {i:2,l:"R0",bg:"#E6F8E6",c:"#2e8b2e"},
+  {i:3,l:"Fichaje R1",bg:"#DFF6F3",c:"#12857C"},
+  {i:4,l:"R1",bg:"#DDF0DD",c:"#145214"},
+  {i:5,l:"Fichaje RF",bg:"#D9F3EF",c:"#0B6B60"},
+  {i:6,l:"RF",bg:"#CFE6CF",c:"#003200"}
+];
+var HC_DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+var HC_CACHE=null;
+function hcP2(n){return (n<10?"0":"")+n;}
+function hcISO(d){return d.getFullYear()+"-"+hcP2(d.getMonth()+1)+"-"+hcP2(d.getDate());}
+function hcHoy(){return hcISO(new Date());}
+function hcFmt(iso){var p=iso.split("-");return p[2]+"-"+p[1]+"-"+p[0];}
+function hcFmtC(iso){var p=iso.split("-");return p[2]+"-"+p[1];}
+function hcDate(iso){var p=iso.split("-");return new Date(+p[0],+p[1]-1,+p[2],12,0,0);}
+function hcAdd(iso,n){var d=hcDate(iso);d.setDate(d.getDate()+n);return hcISO(d);}
+function hcLunes(iso){var d=hcDate(iso);var w=(d.getDay()+6)%7;d.setDate(d.getDate()-w);return hcISO(d);}
+function hcHabil(iso){var w=(hcDate(iso).getDay()+6)%7;return w<5&&HC_FERIADOS.indexOf(iso)<0;}
+
+function hcContar(){ // acumulado actual de los 7 hitos (una vivienda cuenta en todos los hitos que ya alcanzó)
+  var h=[0,0,0,0,0,0,0],tot=0;
+  for(var i=0;i<MANZANAS.length;i++){
+    var mz=MANZANAS[i];
+    for(var j=0;j<mz.lotes.length;j++){
+      tot++;
+      var u=uH(gH(mz.id,mz.lotes[j]));
+      if(!u)continue;
+      for(var k=0;k<ET.length;k++)if(EN[ET[k]]<=EN[u])h[k]++;
+    }
+  }
+  return {h:h,total:tot};
+}
+
+function hcGuardarCierre(fecha){
+  var c=hcContar();
+  var url=SCRIPT_URL+"?accion=cierre_hist_v&fecha="+fecha+"&v="+encodeURIComponent(JSON.stringify(c.h))+"&total="+c.total;
+  showT("Guardando...");
+  fetch(url)
+    .then(function(r){return r.json();})
+    .then(function(r){
+      if(r.ok){HC_CACHE=null;showT("Día cerrado ✓ "+hcFmt(fecha)+(r.reemplazado?" (reemplazó el cierre de hoy)":""));}
+      else showT("Error: "+(r.error||"no se guardó el cierre"));
+    })
+    .catch(function(){showT("No se pudo conectar");});
+}
+
+function hcCerrar(){document.getElementById("mr-hc").classList.remove("v");}
+
+function abrirHistorialCierres(){
+  document.getElementById("mr-hc").classList.add("v");
+  var body=document.getElementById("hc-body");
+  body.innerHTML="<div style='text-align:center;color:#999;padding:2rem;font-size:12px'>Cargando historial...</div>";
+  document.getElementById("hc-info").innerHTML="";
+  fetch(SCRIPT_URL+"?accion=get_cierres_v&_="+Date.now(),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(r){
+      if(!r.ok)throw new Error(r.error||"error");
+      HC_CACHE=r.cierres||[];hcRender(HC_CACHE);
+    })
+    .catch(function(){
+      body.innerHTML="<div style='text-align:center;color:#c00;padding:2rem;font-size:12px'>No se pudo cargar el historial. Revisa tu conexión y vuelve a intentar.</div>";
+    });
+}
+
+function hcRender(cierres){
+  var body=document.getElementById("hc-body"),info=document.getElementById("hc-info");
+  if(!cierres.length){
+    info.innerHTML="";
+    body.innerHTML="<div style='text-align:center;color:#888;padding:2rem 1rem;font-size:12px;line-height:1.5'>Aún no hay cierres registrados.<br>Al terminar la jornada, entra como Admin y presiona <b>Cerrar dia</b>: desde ese día se arma el historial.</div>";
+    return;
+  }
+  var tot=cierres[cierres.length-1].total||0;
+  // delta de cada cierre contra el cierre anterior
+  var map={},prev=[0,0,0,0,0,0,0],prevF=null;
+  for(var i=0;i<cierres.length;i++){
+    var c=cierres[i],d=[],gap=0;
+    for(var k=0;k<7;k++)d.push(c.h[k]-prev[k]);
+    if(prevF){var x=hcAdd(prevF,1);while(x<c.fecha){if(hcHabil(x))gap++;x=hcAdd(x,1);}}
+    map[c.fecha]={d:d,h:c.h,gap:gap};
+    prev=c.h;prevF=c.fecha;
+  }
+  var hoy=hcHoy();
+  var ult=cierres[cierres.length-1].fecha;
+  info.innerHTML="Último cierre: <b>"+hcFmt(ult)+"</b> · "+cierres.length+" cierre"+(cierres.length>1?"s":"")+" registrado"+(cierres.length>1?"s":"")+". Cada número es lo que avanzó ese día respecto del cierre anterior (acumulado de cada hito). <sup style='color:#E18426;font-weight:700'>*</sup> = incluye avance de días hábiles sin cierre. Las semanas más recientes están arriba; baja para ver las anteriores.";
+  var ini=hcLunes(cierres[0].fecha),fin=hcLunes(hoy>ult?hoy:ult);
+  var semanas=[],w=fin;
+  while(w>=ini){semanas.push(w);w=hcAdd(w,-7);}
+  var html="";
+  for(var s=0;s<semanas.length;s++){
+    var lun=semanas[s],dias=[];
+    for(var n=0;n<7;n++){var f=hcAdd(lun,n);if(n<5||map[f])dias.push(f);}
+    var th="<tr><th style='width:112px'></th>";
+    for(var q=0;q<dias.length;q++){
+      var f2=dias[q],fer=HC_FERIADOS.indexOf(f2)>=0,nm=HC_DIAS[(hcDate(f2).getDay()+6)%7];
+      th+="<th class='"+(fer?"hc-fer ":"")+(f2===hoy?"hc-hoy":"")+"'>"+nm+"<small>"+hcFmtC(f2)+"</small>"+(fer?"<small class='fer'>FERIADO</small>":"")+"</th>";
+    }
+    th+="<th style='background:#EFEDE6;width:64px'>Prom.<small>por día hábil</small></th><th style='background:#EFEDE6;width:70px'>Acum.<small>al cierre</small></th></tr>";
+    // promedio: suma de avances de la semana / dias hábiles transcurridos
+    var habiles=0,lastF=null;
+    for(var q2=0;q2<dias.length;q2++){var f3=dias[q2];if(f3<=hoy&&hcHabil(f3))habiles++;if(map[f3])lastF=f3;}
+    if(habiles<1)habiles=1;
+    var rows="";
+    for(var r=0;r<HC_FILAS.length;r++){
+      var F=HC_FILAS[r],suma=0,tr="<tr><td class='hc-rl' style='background:"+F.bg+";color:"+F.c+"'>"+F.l+"</td>";
+      for(var q3=0;q3<dias.length;q3++){
+        var ff=dias[q3],m=map[ff];
+        if(!m){tr+="<td class='hc-nd'>"+(ff<=hoy&&hcHabil(ff)?"·":"")+"</td>";continue;}
+        var v=m.d[F.i];suma+=v;
+        var txt=v>0?"+"+v:(v<0?"−"+Math.abs(v):"0");
+        var col=v>0?F.c:(v<0?"#C0392B":"#aaa");
+        tr+="<td"+(v===0?" class='hc-z'":"")+" style='"+(v!==0?"font-weight:700;color:"+col:"")+"'"+(m.gap?" title='Incluye avance de "+m.gap+" día(s) hábil(es) sin cierre'":"")+">"+txt+(m.gap&&v!==0?"<sup>*</sup>":"")+"</td>";
+      }
+      var prom=lastF?(suma/habiles):null;
+      tr+="<td class='hc-p' style='color:"+F.c+"'>"+(prom===null?"—":prom.toFixed(1))+"</td>";
+      if(lastF){var ac=map[lastF].h[F.i];tr+="<td class='hc-a'>"+ac+"<small>"+(tot?Math.round(ac*100/tot):0)+"%</small></td>";}
+      else tr+="<td class='hc-a'>—</td>";
+      rows+=tr+"</tr>";
+    }
+    html+="<div class='hc-wk'>Semana del "+hcFmt(lun)+" al "+hcFmt(hcAdd(lun,4))+"</div><div class='hc-sem'><table class='hc-t'>"+th+rows+"</table></div>";
+  }
+  body.innerHTML=html;
+}
+
 function cerrarDiaRs(){
   if(!admin){showT("Requiere acceso admin");openPin();return;}
-  if(!confirm("¿Cerrar día y guardar avance en Google Sheets?"))return;
+  if(!confirm("¿Cerrar el día "+hcFmt(hcHoy())+" y guardar el avance en Google Sheets?\n\nSi hoy ya se cerró antes, ese cierre se reemplaza con el estado actual."))return;
   // Calcular totales por manzana
   var totales=[];
   for(var i=0;i<MANZANAS.length;i++){
@@ -895,12 +1059,12 @@ function cerrarDiaRs(){
     }
     totales.push({manzana:mz.id,sg:sg,r0:r0,r1:r1,rf:rf,total:mz.lotes.length});
   }
-  var hoy=new Date().toISOString().slice(0,10);
+  var hoy=hcHoy();
+  hcGuardarCierre(hoy);
   var url=SCRIPT_URL+"?accion=cerrar_dia_v&fecha="+hoy+"&datos="+encodeURIComponent(JSON.stringify(totales));
-  showT("Guardando...");
   fetch(url)
   .then(function(r){return r.json();})
-  .then(function(r){showT(r.ok?"Día cerrado ✓ ("+r.manzanas+" manzanas)":"Error: "+(r.error||""));})
+  .then(function(r){if(!r.ok)showT("Error: "+(r.error||""));})
   .catch(function(){showT("No se pudo conectar");});
 }
 
