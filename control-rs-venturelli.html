@@ -234,7 +234,7 @@ body{font-family:-apple-system,sans-serif;background:#f0f0ec;color:#1a1a1a}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
       <div>
         <div style="font-size:14px;font-weight:700;color:#1A1846">Histórico Semanal</div>
-        <div style="font-size:10px;color:#888">Acumulado y avance parcial por hito · últimas 4 semanas</div>
+        <div style="font-size:10px;color:#888">Acumulado por hito al cierre de cada una de las últimas 4 semanas</div>
       </div>
       <button onclick="cerrarHistoricoRS()" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#888;padding:0 4px">&times;</button>
     </div>
@@ -844,21 +844,9 @@ function cerrarHistoricoRS(){
 function renderHistoricoRS(snapshots,error,metaSemana,progAcumHoy){
   var live=accHitosLiveRS();
   var hitos=[{k:"sg",l:"Sello gris",c:"#185FA5",prog:false},{k:"r0",l:"&ge; R0",c:"#BA7517",prog:true},{k:"r1",l:"&ge; R1",c:"#3B6D11",prog:true},{k:"rf",l:"RF",c:"#1D9E75",prog:true}];
-  var deltas=[];
-  if(snapshots&&snapshots.length>0){
-    for(var i=0;i<snapshots.length;i++){
-      var prev=i>0?snapshots[i-1]:{sg:0,r0:0,r1:0,rf:0,r0_prog:0,r1_prog:0,rf_prog:0};
-      var d={fecha:snapshots[i].fecha,sg:snapshots[i].sg-prev.sg,r0:snapshots[i].r0-prev.r0,r1:snapshots[i].r1-prev.r1,rf:snapshots[i].rf-prev.rf};
-      ["r0","r1","rf"].forEach(function(k){
-        var kp=k+"_prog";
-        if(snapshots[i][kp]!==undefined&&prev[kp]!==undefined) d[kp]=snapshots[i][kp]-prev[kp];
-      });
-      deltas.push(d);
-    }
-    deltas=deltas.slice(-4);
-  }
+  var cols=(snapshots||[]).slice(-4);  // acumulado al corte de cada semana (tal cual quedó guardado)
   var html="<tr style='background:#f5f5f3'><th style='padding:5px 6px;text-align:left;border-bottom:1px solid #ddd'>Hito</th><th style='padding:5px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap'>Real acum.</th><th style='padding:5px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap'>Program. acum.</th>";
-  deltas.forEach(function(d){
+  cols.forEach(function(d){
     html+="<th style='padding:5px;text-align:center;border-bottom:1px solid #ddd;font-size:9px;color:#888'>Sem. "+d.fecha+"</th>";
   });
   html+="</tr>";
@@ -866,15 +854,15 @@ function renderHistoricoRS(snapshots,error,metaSemana,progAcumHoy){
     var progTxt=(h.prog&&progAcumHoy&&progAcumHoy[h.k]!==undefined)?progAcumHoy[h.k]:"—";
     var progCellColor=h.prog?"#555":"#bbb";
     html+="<tr style='border-bottom:1px solid #eee'><td style='padding:5px 6px;font-weight:500'>"+h.l+"</td><td style='padding:5px;text-align:center;color:"+h.c+";font-weight:700'>"+live[h.k]+"</td><td style='padding:5px;text-align:center;color:"+progCellColor+";font-weight:600'>"+progTxt+"</td>";
-    deltas.forEach(function(d){
+    cols.forEach(function(d){
       var v=d[h.k];
       var kp=h.k+"_prog";
       if(h.prog&&d[kp]!==undefined){
         var meta=d[kp];
         var ok=v>=meta;
-        html+="<td style='padding:4px;text-align:center;color:"+h.c+";font-size:10px'>"+(v>=0?"+":"")+v+"<div style='font-size:9px;color:"+(ok?"#3B6D11":"#C0392B")+"'>meta "+meta+(ok?" ✓":" ✗")+"</div></td>";
+        html+="<td style='padding:4px;text-align:center;color:"+h.c+";font-weight:700'>"+v+"<div style='font-size:9px;font-weight:400;color:"+(ok?"#3B6D11":"#C0392B")+"'>prog. "+meta+(ok?" ✓":" ✗")+"</div></td>";
       } else {
-        html+="<td style='padding:5px;text-align:center;color:"+h.c+"'>"+(v>=0?"+":"")+v+"</td>";
+        html+="<td style='padding:5px;text-align:center;color:"+h.c+";font-weight:700'>"+v+"</td>";
       }
     });
     html+="</tr>";
@@ -901,7 +889,7 @@ function renderHistoricoRS(snapshots,error,metaSemana,progAcumHoy){
   if(nota){
     if(error) nota.innerHTML="No se pudo conectar con Google Sheets (tardó demasiado o se cortó la conexión). El acumulado mostrado es el estado local. <span onclick=\"abrirHistoricoRS()\" style=\"color:#1A1846;text-decoration:underline;cursor:pointer;font-weight:600\">Reintentar</span>";
     else if(!snapshots||snapshots.length===0) nota.textContent="Aún no hay cortes semanales guardados. Aparecerán aquí automáticamente cada semana.";
-    else nota.textContent="\"Real acum.\" es el estado actual en vivo. \"Program. acum.\" es lo que debería llevar según el programa a esta fecha.";
+    else nota.textContent="\"Real acum.\" es el estado actual en vivo. Cada columna semanal muestra lo acumulado al corte de ese domingo; \"prog.\" es lo que debía llevar según el programa a esa fecha (✓ si se cumplió, ✗ si no).";
   }
 }
 
