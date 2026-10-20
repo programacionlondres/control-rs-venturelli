@@ -684,54 +684,107 @@ function exportar(){
 
 function capturar(){
   var btn=document.getElementById('btn-cap');
-  btn.textContent='Generando...';
-  btn.disabled=true;
-  var target=document.getElementById('svg-wrap');
-  html2canvas(target,{
-    scale:2,
-    useCORS:true,
-    backgroundColor:'#ffffff',
-    scrollX:0,
-    scrollY:-window.scrollY
-  }).then(function(svgCanvas){
-    // Capturar header + resumen + filtros + plano
-    var topEl=document.querySelector('.header');
-    var bottomEl=document.getElementById('svg-wrap');
-    var topRect=topEl.getBoundingClientRect();
-    var bottomRect=bottomEl.getBoundingClientRect();
-    var totalH=bottomRect.bottom-topRect.top;
-    var totalW=Math.max(topEl.offsetWidth,bottomEl.offsetWidth);
-
-    html2canvas(document.body,{
-      scale:2,
-      useCORS:true,
-      backgroundColor:'#f0f0ec',
-      x:0,
-      y:window.scrollY+topRect.top,
-      width:document.body.clientWidth,
-      height:totalH,
-      windowWidth:document.body.clientWidth,
-      windowHeight:totalH
-    }).then(function(canvas){
-      var a=document.createElement('a');
-      a.download='reporte_rs_venturelli_'+new Date().toISOString().slice(0,10)+'.png';
-      a.href=canvas.toDataURL('image/png');
-      a.click();
-      btn.textContent='Imagen';
-      btn.disabled=false;
-      showT('Imagen descargada');
-    }).catch(function(){
-      btn.textContent='Imagen';
-      btn.disabled=false;
-      showT('Error al generar imagen');
-    });
-  });
+  if(btn.disabled)return;
+  btn.textContent='Generando...';btn.disabled=true;
+  var box=null,svgUrl=null;
+  function fin(ok,msg){
+    if(box&&box.parentNode)box.parentNode.removeChild(box);
+    if(svgUrl)URL.revokeObjectURL(svgUrl);
+    btn.textContent='Imagen';btn.disabled=false;
+    showT(msg||(ok?'Imagen descargada':'No se pudo generar la imagen'));
+  }
+  try{
+    updateSVG();
+    var W=1300,S=3,M=16,PAD=12;               // ancho base (px), factor de nitidez, margen y relleno del panel
+    var svg=document.querySelector('#svg-wrap svg');
+    var vb=svg.viewBox&&svg.viewBox.baseVal;
+    var vbw=(vb&&vb.width)||parseFloat(svg.getAttribute('width'))||1000;
+    var vbh=(vb&&vb.height)||parseFloat(svg.getAttribute('height'))||700;
+    var vx=(vb&&vb.x)||0,vy=(vb&&vb.y)||0;
+    try{ // si algo del plano (p. ej. un rotulo) se sale un poco del marco, se amplia el marco para que no quede cortado
+      var bb=svg.getBBox(),tx=vbw*0.04,ty=vbh*0.04;
+      var l=vx,t=vy,r=vx+vbw,b=vy+vbh;
+      if(vx-bb.x>0&&vx-bb.x<=tx)l=bb.x;
+      if(vy-bb.y>0&&vy-bb.y<=ty)t=bb.y;
+      if(bb.x+bb.width-(vx+vbw)>0&&bb.x+bb.width-(vx+vbw)<=tx)r=bb.x+bb.width;
+      if(bb.y+bb.height-(vy+vbh)>0&&bb.y+bb.height-(vy+vbh)<=ty)b=bb.y+bb.height;
+      vx=l;vy=t;vbw=r-l;vbh=b-t;
+    }catch(e0){}
+    var pw=W-2*M-2*PAD, ph=Math.round(pw*vbh/vbw);
+    // 1) Copia del plano COMPLETO (sin zoom ni scroll) con los estilos tal como se ven, para que se dibuje igual fuera de la pagina
+    var clone=svg.cloneNode(true);
+    var src=svg.querySelectorAll('*'),dst=clone.querySelectorAll('*');
+    var props=['fill','fill-opacity','stroke','stroke-opacity','stroke-width','stroke-linecap','stroke-linejoin','stroke-dasharray','opacity','display','visibility','font-family','font-size','font-weight','text-anchor','dominant-baseline','paint-order'];
+    var ratio=pw/vbw;
+    for(var i=0;i<src.length&&i<dst.length;i++){
+      var tg=src[i].tagName.toLowerCase();
+      if(tg==='style'||tg==='defs'||tg==='title'||tg==='desc')continue;
+      var cs=getComputedStyle(src[i]),st='';
+      for(var k=0;k<props.length;k++){var v=cs.getPropertyValue(props[k]);if(v)st+=props[k]+':'+v+';';}
+      if(cs.getPropertyValue('vector-effect')==='non-scaling-stroke'){
+        var sw=parseFloat(cs.getPropertyValue('stroke-width'))||1;
+        st+='vector-effect:none;stroke-width:'+(sw/ratio)+';';
+      }
+      dst[i].setAttribute('style',st);
+    }
+    clone.removeAttribute('id');clone.removeAttribute('style');
+    clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    clone.setAttribute('width',pw*S);clone.setAttribute('height',ph*S);
+    clone.setAttribute('viewBox',vx+' '+vy+' '+vbw+' '+vbh);
+    var xml=new XMLSerializer().serializeToString(clone);
+    svgUrl=URL.createObjectURL(new Blob([xml],{type:'image/svg+xml;charset=utf-8'}));
+    // 2) Encabezado: titulo + resumen + barra + leyenda (siempre se arma desde los datos, no depende de lo que se vea en pantalla)
+    function limpia(n){var c=n.cloneNode(true);c.removeAttribute('id');var d=c.querySelectorAll('[id]');for(var j=0;j<d.length;j++)d[j].removeAttribute('id');return c;}
+    box=document.createElement('div');
+    box.style.cssText='position:fixed;left:-20000px;top:0;width:'+W+'px;background:#f0f0ec;font-family:'+getComputedStyle(document.body).fontFamily+';color:#222';
+    var head=document.createElement('div');
+    head.style.cssText='display:flex;justify-content:space-between;align-items:flex-end;padding:16px '+M+'px 2px';
+    var ttl=(document.querySelector('.titulo')||{}).textContent||document.title;
+    var fh=(document.getElementById('fh')||{}).textContent||'';
+    var hora=new Date().toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+    head.innerHTML='<div style="font-size:26px;font-weight:700;color:#1A1846">'+ttl+'</div><div style="font-size:13px;color:#666">'+fh+' · '+hora+'</div>';
+    box.appendChild(head);
+    box.appendChild(limpia(document.getElementById('res')));
+    box.appendChild(limpia(document.querySelector('.bp')));
+    box.appendChild(limpia(document.getElementById('ptxt')));
+    var ley=limpia(document.getElementById(modTip?'ley-tip':'ley'));ley.style.display='flex';box.appendChild(ley);
+    var notas=[];
+    if(modTip)notas.push('Vista por tipología');
+    var fb=document.querySelector('.fb.on');
+    if(fa!=='todos'&&fb)notas.push('Filtro: '+fb.textContent.replace(/\s+/g,' ').trim());
+    if(notas.length){var nt=document.createElement('div');nt.style.cssText='font-size:11px;color:#777;padding:0 '+M+'px 6px';nt.textContent=notas.join(' · ');box.appendChild(nt);}
+    document.body.appendChild(box);
+    html2canvas(box,{scale:S,useCORS:true,backgroundColor:'#f0f0ec',logging:false,scrollX:0,scrollY:0}).then(function(hc){
+      var img=new Image();
+      img.onload=function(){
+        try{
+          var hh=hc.height/S;
+          var panelH=ph+2*PAD;
+          var H=hh+8+panelH+M;
+          var cv=document.createElement('canvas');cv.width=W*S;cv.height=Math.round(H*S);
+          var cx=cv.getContext('2d');
+          cx.fillStyle='#f0f0ec';cx.fillRect(0,0,cv.width,cv.height);
+          cx.drawImage(hc,0,0);
+          cx.fillStyle='#ffffff';cx.strokeStyle='#e0e0db';cx.lineWidth=S;
+          var px=M*S,py=(hh+8)*S,pwid=(W-2*M)*S,phei=panelH*S;
+          cx.fillRect(px,py,pwid,phei);cx.strokeRect(px,py,pwid,phei);
+          cx.drawImage(img,px+PAD*S,py+PAD*S,pw*S,ph*S);
+          cv.toBlob(function(b){
+            if(!b){fin(false);return;}
+            var u=URL.createObjectURL(b),a=document.createElement('a');
+            a.download='reporte_rs_venturelli_'+new Date().toISOString().slice(0,10)+'.png';
+            a.href=u;document.body.appendChild(a);a.click();document.body.removeChild(a);
+            setTimeout(function(){URL.revokeObjectURL(u);},4000);
+            fin(true);
+          },'image/png');
+        }catch(e2){fin(false);}
+      };
+      img.onerror=function(){fin(false);};
+      img.src=svgUrl;
+    }).catch(function(){fin(false);});
+  }catch(e){fin(false);}
 }
-var dias=["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
-var meses=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
-var hoy=new Date();
-document.getElementById("fh").textContent=dias[hoy.getDay()]+" "+hoy.getDate()+" de "+meses[hoy.getMonth()]+" "+hoy.getFullYear();
-// Datos iniciales cargados desde imagen de estado actual
+
 function cargarDatosIniciales(){/* sin datos semilla para Petit */}
 cargarDatosIniciales();
 renderRes();
